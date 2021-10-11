@@ -1,0 +1,87 @@
+---
+title: "Homework, Week 2"
+output: html_notebook
+---
+
+```{r}
+library(rethinking)
+
+set.seed(100)
+```
+
+# Q1
+
+We will build a model to predict height for the !Kung people.
+
+## Load and explore the !Kung data
+
+```{r}
+# load the data
+data(Howell1)
+d <- Howell1
+
+# show the data frame 
+print(d)
+
+# summarize the data
+precis(d)
+```
+## Filter for the adults
+
+```{r}
+# filter for the adults
+d2 <- d[ d$age >= 18 , ]
+
+# show the data frame
+print(d2)
+
+# summarize the data
+precis(d2)
+```
+
+```{r}
+# plot height distribution
+dens(d2$height)
+```
+
+## Constructing a model
+
+We will model height using a Normal likelihood with unknown mean and unknown variance.
+
+A reasonable prior for the mean could be a Normal distribution centred on 178cm (the author's height), with 95% of the probability between $178 \pm 40$, meaning a standard deviation of 20.
+
+The standard deviation must be positive, but unlike the mean we do not really have a natural intuition for plausible values, so we can use a flat prior that is bounded between (say) 0 and 50. A standard deviation of 50 would imply that 95% of individual heights lie within 100cm of the average height, which is a large range.
+
+```{r}
+# plot prior for mean
+curve(dnorm(x ,178 ,20), from=100, to=250)
+
+# plot prior for standard deviation
+curve(dunif(x, 0, 50), from=-10, to=60)
+```
+
+```{r}
+# prior predictive simulation
+sample_mu <- rnorm(1e4, 178, 20)
+sample_sigma <- runif(1e4, 0, 50)
+prior_h <- rnorm(1e4, sample_mu, sample_sigma)
+dens(prior_h)
+```
+
+```{r}
+# define the model formulae
+flist <- alist(
+    height ~ dnorm(mu, sigma),
+    mu ~ dnorm(178, 20),
+    sigma ~ dunif(0, 50)
+  )
+
+# fit model using quadratic approximation
+model <- quap(flist, data=d2)
+
+precis(model)
+```
+
+```{r}
+
+```

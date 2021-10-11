@@ -1,0 +1,128 @@
+---
+title: "Homework, Week 5"
+output: html_notebook
+---
+
+```{r}
+library(rethinking)
+
+set.seed(100)
+```
+
+# Q1
+
+```{r}
+# load the data
+data(Wines2012)
+d <- Wines2012
+
+# standardize score and get index variables
+dat_list <- list(
+  S = scale(d$score),
+  judge_id = as.integer(d$judge),
+  wine_id = as.integer(d$wine)
+)
+```
+
+```{r}
+dens(dat_list$S)
+```
+
+```{r}
+# define the model formulae
+flist <- alist(
+  S ~ dnorm(mu, sigma),
+  mu <- bJ[judge_id] + bW[wine_id],
+  bJ[judge_id] ~ dnorm(0, 1),
+  bW[wine_id] ~ dnorm(0, 1),
+  sigma ~ dexp(1)
+)
+
+set_ulam_cmdstan(TRUE)
+
+# fit the model
+model <- ulam(flist, data=dat_list, chains=4, cores=4)
+```
+
+```{r}
+precis(model, depth=2)
+
+traceplot(model)
+```
+
+```{r}
+precis_plot(precis(model, depth=2))
+```
+
+There is more variation among judges than among wines.
+
+# Q2
+
+```{r}
+# standardize score and get index variables
+dat_list <- list(
+  S = scale(d$score),
+  F = ifelse(d$flight == "red", 1, 2),
+  JA = d$judge.amer + 1,
+  WA = d$wine.amer + 1
+)
+```
+
+* `JA` is 1 for French and 2 for American judges.
+* `WA` is 1 for French and 2 for New Jersey wines.
+* `F` is 1 for red and 2 for white wines.
+
+## Indicator variable model
+
+```{r}
+flist <- alist(
+  S ~ dnorm(mu, sigma),
+  mu <- bF*F + bJA*JA + bWA*WA,
+  c(bF, bJA, bWA) ~ dnorm(0, 0.5),
+  sigma ~ dexp(1)
+)
+
+model <- ulam(flist, data=dat_list, chains=4, cores=4)
+```
+
+```{r}
+precis_plot(precis(model, depth=2), xlim=c(-1.25, 1.25))
+
+precis(model)
+```
+
+The `bF` intercept seems to show that red and white wines are scored about the same. American judges were more positive, but American wines were judged more negatively.
+
+## Index variable model
+
+```{r}
+flist <- alist(
+  S ~ dnorm(mu, sigma),
+  mu <- bF[F] + bJA[JA] + bWA[WA],
+  bF[F] ~ dnorm(0, 0.5),
+  bJA[JA] ~ dnorm(0, 0.5),
+  bWA[WA] ~ dnorm(0, 0.5),
+  sigma ~ dexp(1)
+)
+
+model <- ulam(flist, data=dat_list, chains=4, cores=4)
+```
+
+```{r}
+precis_plot(precis(model, depth=2), xlim=c(-1.25, 1.25))
+
+precis(model, depth=2)
+```
+
+The interpretation of these results is consistent with the indicator variable model. To show that the models are the same, we can do:
+
+```{r}
+post <- extract.samples(model)
+diff_wa <- post$bWA[,2] - post$bWA[,1]
+precis(diff_wa)
+```
+
+This equals the value of bWA in the indicator variable model.
+
+# Q3
+

@@ -1,0 +1,91 @@
+---
+title: "Homework, Week 1"
+output: html_notebook
+---
+
+```{r}
+library(rethinking)
+
+set.seed(100)
+```
+
+# Q1
+
+We compute a grid approximation of the posterior.
+
+```{r}
+# define grid
+p_grid <- seq(from=0, to=1, length.out=1000)
+
+# define prior
+prior <- rep(1, 1000)
+
+# compute likelihood at each value in grid
+likelihood <- dbinom(4, size=15, prob=p_grid)
+
+# compute product of likelihood and prior
+unstd.posterior <- likelihood * prior
+
+# standardize the posterior, so it sums to 1
+posterior <- unstd.posterior / sum(unstd.posterior)
+
+# plot the posterior
+plot(p_grid, posterior, type="b", xlab="Probability of water", ylab="Posterior probability")
+
+# sample from the posterior
+samples <- sample(p_grid, prob=posterior, size=1e4, replace=TRUE)
+
+# plot the samples
+plot(samples, xlab="Sample number", ylab="Probability of water")
+dens(samples, xlab="Probability of water", ylab="Sample number")
+```
+
+# Q2
+
+We repeat Q1 using a prior that is 0 below $p=0.5$ and constant above $p=0.5$.
+
+```{r}
+# define grid
+p_grid <- seq(from=0, to=1, length.out=1000)
+
+prior <- ifelse( p_grid < 0.5 , 0 , 1 )
+
+# compute likelihood at each value in grid
+likelihood <- dbinom(4, size=15, prob=p_grid)
+
+# compute product of likelihood and prior
+unstd.posterior <- likelihood * prior
+
+# standardize the posterior, so it sums to 1
+posterior <- unstd.posterior / sum(unstd.posterior)
+
+# plot the posterior
+plot(p_grid, posterior, type="b", xlab="Probability of water", ylab="Posterior probability")
+
+# sample from the posterior
+samples <- sample(p_grid, prob=posterior, size=1e4, replace=TRUE)
+
+# plot the samples
+plot(samples, xlab="Sample number", ylab="Probability of water")
+dens(samples, xlab="Probability of water", ylab="Sample number")
+```
+
+# Q3 
+
+We compute 89% percentile and HPDI intervals for Q2.
+
+PI: quantiles
+HPDI: narrowest interval containing the specified probability mass
+
+```{r}
+PI(samples)
+HPDI(samples)
+
+# compute MAP estimate (parameter value with highest posterior probability)
+p_grid[ which.max(posterior) ]
+
+# alternatively, approximate MAP estimate using samples from posterior
+chainmode(samples, adj=0.01)
+```
+
+The HPDI is narrower, and includes the most probable parameter value.
