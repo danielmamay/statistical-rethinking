@@ -11,9 +11,9 @@ set.seed(100)
 
 # Q1
 
-We will build a model to predict height for the !Kung people.
+We will build a model to predict height for the !Kung adults, using weight as a predictor.
 
-## Load and explore the !Kung data
+## Load the !Kung data
 
 ```{r}
 # load the data
@@ -42,37 +42,57 @@ precis(d2)
 ```{r}
 # plot height distribution
 dens(d2$height)
+
+# plot height versus weight
+plot(d2$height ~ d2$weight)
 ```
 
 ## Constructing a model
 
-We will model height using a Normal likelihood with unknown mean and unknown variance.
+We will model height using a Normal likelihood with unknown mean and unknown variance. The unknown mean can be modelled with an intercept and a slope for the height predictor.
 
-A reasonable prior for the mean could be a Normal distribution centred on 178cm (the author's height), with 95% of the probability between $178 \pm 40$, meaning a standard deviation of 20.
+A reasonable prior for the intercept could be a Normal distribution centred on 178cm (the author's height), with 95% of the probability between $178 \pm 40$, meaning a standard deviation of 20. As we have seen, and it makes sense, that height tends to increase with weight, it seems reasonable to choose a prior that restricts the slope to positive values, such as a $\text{Log-Normal}(0, 1)$.
 
 The standard deviation must be positive, but unlike the mean we do not really have a natural intuition for plausible values, so we can use a flat prior that is bounded between (say) 0 and 50. A standard deviation of 50 would imply that 95% of individual heights lie within 100cm of the average height, which is a large range.
 
 ```{r}
-# plot prior for mean
-curve(dnorm(x ,178 ,20), from=100, to=250)
+# plot prior for intercept mean
+curve(dnorm(x, 178, 20), from=100, to=250)
 
-# plot prior for standard deviation
+# plot prior for intercept standard deviation
 curve(dunif(x, 0, 50), from=-10, to=60)
+
+# plot prior for slope 
+curve(dlnorm(x, 0, 1), from=-5, to=10)
 ```
 
 ```{r}
 # prior predictive simulation
-sample_mu <- rnorm(1e4, 178, 20)
-sample_sigma <- runif(1e4, 0, 50)
-prior_h <- rnorm(1e4, sample_mu, sample_sigma)
-dens(prior_h)
+
+N <- 100
+a <- rnorm(N, 178, 20) # intercept
+b <- rlnorm(N, 0, 1) # slope
+
+plot(NULL, xlim=range(d2$weight), ylim=c(-100, 400),
+  xlab="weight", ylab="height")
+abline(h=0, lty=2)
+abline(h=272, lty=1, lwd=0.5)
+mtext("log(b) ~ dlnorm(0, 1)")
+weight_bar <- mean(d2$weight)
+for (i in 1:N)
+  curve(a[i] + b[i]*(x - weight_bar),
+    from=min(d2$weight), to=max(d2$weight), add=TRUE,
+    col=col.alpha("black", 0.2)
+  )
 ```
 
 ```{r}
 # define the model formulae
 flist <- alist(
     height ~ dnorm(mu, sigma),
-    mu ~ dnorm(178, 20),
+    mu <- a + b * (weight - mean(d2$weight)),
+    a ~ dnorm(178, 20),
+    b ~ dlnorm(0, 1),
     sigma ~ dunif(0, 50)
   )
 
@@ -83,5 +103,80 @@ precis(model)
 ```
 
 ```{r}
+# plot posterior inference against the data
 
+plot(height ~ weight, data=d2, col=rangi2)
+
+post <- extract.samples(model)
+a_map <- mean(post$a)
+b_map <- mean(post$b)
+curve(a_map + b_map * (x - mean(d2$weight)), add=TRUE)
+```
+
+## Individual predictions
+
+```{r}
+post <- extract.samples(model)
+
+mu_at_45 <- post$a + post$b * (45 - mean(d2$weight))
+
+dens(mu_at_45 , col=rangi2, lwd=2, xlab="mu|weight=45")
+
+PI(mu_at_45)
+```
+
+```{r}
+q1 <- data.frame(weight=c(45, 40, 65, 31))
+height_sim <- sim(model, data=q1)
+
+expected_height <- apply(height_sim, 2, mean)
+ci_height <- apply(height_sim, 2, PI)
+
+q1$expected_height <- expected_height
+q1$L89 <- ci_height[1,]
+q1$U89 <- ci_height[2,]
+round(q1, 1)
+```
+
+# Q2
+
+We will model the relationship between height (cm) and the natural log of weight (log-kg) for all ages.
+
+```{r}
+d$log_weight <- log(d$weight)
+
+plot(height ~ log_weight, data=d)
+```
+
+```{r}
+# define the model formulae
+flist <- alist(
+    height ~ dnorm(mu, sigma),
+    mu <- a + b * (log_weight - mean(d$log_weight)),
+    a ~ dnorm(178, 20),
+    b ~ dlnorm(0, 1),
+    sigma ~ dunif(0, 50)
+  )
+
+# fit model using quadratic approximation
+model <- quap(flist, data=d)
+
+precis(model)
+```
+
+```{r}
+# plot posterior inference against the data
+
+plot(height ~ weight, data=d, col=rangi2)
+
+log_weight_seq <- log(1:60)
+
+mu <- sim(model, data=list(log_weight=log_weight_seq))
+
+mu_mean <- apply(mu, 2, mean)
+mu_ci <- apply(mu, 2, PI)
+
+lines(exp(log_weight_seq), mu_mean, lwd=3)
+
+shade(mu_ci, exp(log_weight_seq))
 ```
