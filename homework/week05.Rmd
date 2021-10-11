@@ -58,21 +58,17 @@ There is more variation among judges than among wines.
 
 # Q2
 
+## Indicator variable model
+
 ```{r}
-# standardize score and get index variables
+# standardize score and get indicator variables
 dat_list <- list(
   S = scale(d$score),
-  F = ifelse(d$flight == "red", 1, 2),
-  JA = d$judge.amer + 1,
-  WA = d$wine.amer + 1
+  F = ifelse(d$flight == "red", 0, 1),
+  JA = d$judge.amer,
+  WA = d$wine.amer
 )
 ```
-
-* `JA` is 1 for French and 2 for American judges.
-* `WA` is 1 for French and 2 for New Jersey wines.
-* `F` is 1 for red and 2 for white wines.
-
-## Indicator variable model
 
 ```{r}
 flist <- alist(
@@ -94,6 +90,20 @@ precis(model)
 The `bF` intercept seems to show that red and white wines are scored about the same. American judges were more positive, but American wines were judged more negatively.
 
 ## Index variable model
+
+```{r}
+# standardize score and get index variables
+dat_list <- list(
+  S = scale(d$score),
+  F = ifelse(d$flight == "red", 1, 2),
+  JA = d$judge.amer + 1,
+  WA = d$wine.amer + 1
+)
+```
+
+* `JA` is 1 for French and 2 for American judges.
+* `WA` is 1 for French and 2 for New Jersey wines.
+* `F` is 1 for red and 2 for white wines.
 
 ```{r}
 flist <- alist(
@@ -126,3 +136,39 @@ This equals the value of bWA in the indicator variable model.
 
 # Q3
 
+```{r}
+# standardize score and get indicator variables
+dat_list <- list(
+  S = scale(d$score),
+  R = ifelse(d$flight == "red", 1, 0),
+  J = d$judge.amer,
+  W = d$wine.amer
+)
+```
+
+* `R` is 1 for red and 0 for white wines.
+* `W` is 1 for New Jersey and 0 for French wines.
+* `J` is 1 for American and 0 for French judges.
+
+```{r}
+# define the model formulae
+flist <- alist(
+  S ~ normal(mu, sigma),
+  mu <- a + bR*R + bJ*J + bW*W + bJW*J*W + bRJ*R*J + bRW*R*W,
+  a ~ normal(0, 0.2),
+  c(bR, bJ, bW) ~ normal(0, 0.5),
+  c(bJW, bRJ, bRW) ~ normal(0, 0.25),
+  sigma ~ exponential(1)
+)
+
+# fit the model
+model <- ulam(flist, data=dat_list, chains=4, cores=4)
+```
+
+```{r}
+precis_plot(precis(model, depth=2))
+
+precis(model)
+```
+
+`bW` (previously `bWA`) is now close to zero. The only interaction away from zero is `bRW`, for red New Jersey wines. 
